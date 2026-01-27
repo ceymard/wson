@@ -90,17 +90,55 @@ Start a _new_ object immediately to the right and read its keys vertically from 
 
 ## [{Object-Append}]
 
-Start a new object and append it to the property
+Enter object-mode in the column to the right. End at the first property on the same level or the end of the sheet.
 
-| **name** |
+Instead of setting the object to the property, append it to an array. It is an error if the property exists and is not an array.
 
-## Object array
+Simple array values and appending objects can coexist.
+
+| **[values]** | stuff | more |
+| --- | --- | ---
+| **[{values}]** | type | subvalue |
+| | value | 1234
+| **[values]** | after |
+
+```json
+{
+  "values": [
+    "stuff",
+    "more",
+    {
+      "type": "value",
+      "subvalue": 1234
+    },
+    "after"
+  ]
+}
+
+```
+
+## [[Object-array]]
+
+For convenience, inline tables can  follow each other in object-array properties.
+
+The header is to the right of the property, and values are below, like in a table.
+
+Properties may use the dot syntax, and columns using the array append syntax can appear several times.
+
+The table ends at the first line where content appear below the property declaration.
+
+Object arrays can be mixed with simple arrays and appended objects. They can also appear several times in the document, even if this use is discouraged.
 
 | [[movies]] | name       | director | year | [actors]         | [actors]       |
 | ---------- | ---------- | -------- | ---- | ---------------- | -------------- |
 |            | Terminator | Cameron  | 1984 | Arnie !          | Linda Hamilton |
 |            | Alien      | Scott    | 1999 | Sigourney Weaver |                |
 |            | Waterworld | Reynolds | 1995 | Kevin Costner    | Hopper         |
+| | | | | |
+| **[[actors]]** | **name** | **surname** | **sign** |
+| | Arnold | Schwarzenegger | Leo
+| | Elijah | Wood | Aquarius
+
 
 ```json
 {
@@ -122,6 +160,18 @@ Start a new object and append it to the property
       "director": "Reynolds",
       "year": 1995,
       "actors": ["Kevin Costner", "Hopper"]
+    }
+  ],
+  "actors": [
+    {
+      "name": "Arnold",
+      "surname": "Schwarzenegger",
+      "sign": "Leo"
+    },
+    {
+      "name": "Elijah",
+      "surname": "Wood",
+      "sign": "Aquarius"
     }
   ]
 }
