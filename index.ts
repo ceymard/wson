@@ -149,7 +149,7 @@ export class WsonReader {
     if (cell?.toString() === Modifier.TOP_LEVEL_APPEND) {
       let res = [] as Result[]
 
-      while (row < this.max_row) {
+      while (row <= this.max_row) {
         let cell = this.getCell(row, column)
         if (cell?.toString() === Modifier.TOP_LEVEL_APPEND) {
           const { result, row: new_row } = this.getObject(row, column + 1)
@@ -184,13 +184,13 @@ export class WsonReader {
         headers.push(setter.setter)
       }
       if (setter.modifier != null) {
-        throw new Error("Table headers cannot have modifiers")
+        throw new Error(`Table headers cannot have modifiers (got "${setter.modifier}") at column ${cell.toString()}`)
       }
     }
 
     row++
 
-    while (row < this.max_row && this.isEmpty(row, column-1)) {
+    while (row <= this.max_row && this.isEmpty(row, column-1)) {
       let line = {} as Result
       let found_one = false
       for (let i = 0; i < headers.length; i++) {
