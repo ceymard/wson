@@ -1,5 +1,5 @@
 {
-  "name": "wson",
+  "name": "sheet-object-notation",
   "module": "index.ts",
   "type": "module",
   "private": true,

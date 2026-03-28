@@ -94,7 +94,6 @@ export class WsonReader {
     if (paths[paths.length-1]?.on_last) {
       throw new Error("[<prop] cannot be the last path component")
     }
-    console.log(paths)
 
     return {setter: function (result: Result, value: Result | Primitive): void {
       let current: any = result
