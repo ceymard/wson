@@ -5,8 +5,8 @@ export type Result = {[name: string]: Result | Primitive } | Result[]
 export const enum Modifier {
   OBJECT = ">",
   INLINE = "<",
-  TABLE = ">>",
-  TOP_LEVEL_APPEND = "+>",
+  TABLE = "<<",
+  TOP_LEVEL_APPEND = ">>",
   NULL = "~",
 }
 
