@@ -1,6 +1,7 @@
+import { isConstructorDeclaration, ModuleDetectionKind } from "typescript";
 
 export type Primitive = string | number | Date | boolean | null
-export type Result = {[name: string]: Result | Primitive } | Result[]
+export type Result = {[name: string]: Result | Primitive } | Result[] | Primitive
 
 export const enum Modifier {
   OBJECT = ">",
@@ -8,6 +9,9 @@ export const enum Modifier {
   TABLE = "<<",
   TOP_LEVEL_APPEND = ">>",
   NULL = "~",
+
+  INLINE_OBJECT = "..{",
+  INLINE_ARRAY = "..[",
 }
 
 const re_obj_modifier = new RegExp("\\s*(" + [Modifier.OBJECT, Modifier.INLINE, Modifier.TABLE].join("|") + ")$")
@@ -47,16 +51,22 @@ export class WsonReader {
     if (cell === Modifier.NULL) {
       return null
     }
-    if (typeof cell === "string" && cell[0] === Modifier.NULL) {
-      let nb = 1
-      for ( ; nb < cell.length; nb++) {
-        if (cell[nb] === Modifier.NULL) {
-          nb++
-        } else {
-          return cell
+    if (typeof cell === "string") {
+      if (cell[0] === Modifier.NULL) {
+        let nb = 1
+        for ( ; nb < cell.length; nb++) {
+          if (cell[nb] === Modifier.NULL) {
+            nb++
+          } else {
+            return cell
+          }
         }
+        return cell.slice(0, nb - 1)
       }
-      return cell.slice(0, nb - 1)
+
+      if (cell.startsWith(Modifier.INLINE_OBJECT) || cell.startsWith(Modifier.INLINE_ARRAY)) {
+        return cell.slice(2)
+      }
     }
     return cell
   }
@@ -146,7 +156,7 @@ export class WsonReader {
 
     let cell = this.getCell(row, column)
 
-    if (cell?.toString() === Modifier.TOP_LEVEL_APPEND) {
+    if (cell?.toString() === Modifier.TOP_LEVEL_APPEND || cell?.toString() === Modifier.INLINE) {
       let res = [] as Result[]
 
       while (row <= this.max_row) {
@@ -157,6 +167,10 @@ export class WsonReader {
           res.push(result)
         } else if (cell === undefined) {
           row++
+        } else if (cell?.toString() === Modifier.INLINE) {
+          const { result, row: new_row } = this.getInline(row, column + 1)
+          row = new_row
+          res.push(result)
         } else {
           throw new Error("Only top level appenders can appear in their own column when used")
         }
@@ -208,6 +222,35 @@ export class WsonReader {
     return { row, column, result: res }
   }
 
+  getInline(row: number, column: number): { row: number, column: number, result: Result[] } {
+    const result = [] as Result[]
+    let _next_row = row + 1
+
+    do {
+      for (let i = 0, l = this.max_column - column; i <= l; i++) {
+        const cell = this.getCell(row, column + i)
+
+        if (cell === Modifier.OBJECT) {
+          const { result: sub_result, row: new_row, column: new_column } = this.getObject(row, column)
+          _next_row = Math.max(_next_row, new_row)
+          result.push(sub_result)
+          column = new_column + 1
+        } else if (cell === Modifier.INLINE) {
+          const { result: sub_result, row: new_row } = this.getInline(row, column)
+          _next_row = Math.max(_next_row, new_row)
+          result.push(sub_result)
+        } else if (cell !== undefined) {
+          result.push(cell)
+        }
+      }
+
+      row = _next_row
+      _next_row = row + 1
+    } while (row <= this.max_row && this.isEmpty(row, column-1))
+
+    return { row, column: column, result: result }
+  }
+
   getObject(row: number, column: number): { row: number, column: number, result: Result } {
     const res = {} as Result
     let last_setter: WsonSetter | null = null
@@ -226,29 +269,19 @@ export class WsonReader {
 
       switch (setter.modifier) {
 
-        case Modifier.OBJECT:
+        case Modifier.OBJECT: {
           const { result, row: new_row } = this.getObject(row, column + 1)
           row = new_row
           last_setter?.(res, result)
           break
+        }
 
-        case Modifier.INLINE:
-          let col = column + 1
-          let cell: Primitive | undefined
-          let _next_row = row + 1
-          while ((cell = this.getCell(row, col)) !== undefined) {
-            if (cell?.toString() === Modifier.OBJECT) {
-              const { result, row: new_row, column: new_column } = this.getObject(row, col)
-              col = new_column + 1
-              _next_row = Math.max(_next_row, new_row)
-              last_setter?.(res, result)
-            } else {
-              col++
-              last_setter?.(res, cell)
-            }
-          }
-          row = _next_row
+        case Modifier.INLINE: {
+          const { result: sub_result, row: new_row } = this.getInline(row, column + 1)
+          row = new_row
+          last_setter?.(res, sub_result)
           break
+        }
 
         case Modifier.TABLE: {
           const { result, row: new_row, column: new_column } = this.getTable(row, column + 1)
