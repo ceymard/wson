@@ -2,7 +2,7 @@
 import * as path from "path"
 import { readFileSync } from "fs"
 import { SmolWorkbook } from "smol-xlsx"
-import { WsonReader } from ".."
+import { ShonReader } from ".."
 
 const wb_array = readFileSync(path.join(__dirname, "wson-test.xlsx"))
 const wb = new SmolWorkbook()
@@ -10,7 +10,7 @@ const wb = new SmolWorkbook()
 wb.read(wb_array)
 
 for (const sheet of wb.sheets) {
-  const reader = new WsonReader({
+  const reader = new ShonReader({
     get: (row, column) => sheet.get(row, column)?.v,
     bounds: () => ({
       min: { row: sheet.min_row, column: sheet.min_col },

@@ -1,4 +1,4 @@
-import { isConstructorDeclaration, ModuleDetectionKind } from "typescript";
+import { parseArray, parseObject } from "./lighton";
 
 export type Primitive = string | number | Date | boolean | null
 export type Result = {[name: string]: Result | Primitive } | Result[] | Primitive
@@ -27,9 +27,9 @@ export interface SheetIterator {
   bounds(): { min: { row: number, column: number }, max: { row: number, column: number } }
 }
 
-export type WsonSetter = (result: Result, value: Result | Primitive) => void
+export type ShonSetter = (result: Result, value: Result | Primitive) => void
 
-export class WsonReader {
+export class ShonReader {
 
   constructor(public iterator: SheetIterator) {
     const bounds = iterator.bounds()
@@ -65,7 +65,12 @@ export class WsonReader {
       }
 
       if (cell.startsWith(Modifier.INLINE_OBJECT) || cell.startsWith(Modifier.INLINE_ARRAY)) {
-        return cell.slice(2)
+        if (cell[2] === "{") {
+          return parseObject(cell.slice(2)).res
+        } else if (cell[2] === "[") {
+          return parseArray(cell.slice(2)).res
+        }
+        return cell
       }
     }
     return cell
@@ -78,7 +83,7 @@ export class WsonReader {
     return this.getCell(row, column) === undefined
   }
 
-  getSetter(value: string): {setter: WsonSetter | null, modifier: Modifier | null} {
+  getSetter(value: string): {setter: ShonSetter | null, modifier: Modifier | null} {
     let modifier: Modifier | null = null
     value = value.replace(re_obj_modifier, (match, mod) => {
       modifier = mod as Modifier
@@ -184,7 +189,7 @@ export class WsonReader {
 
   getTable(row: number, column: number): { row: number, column: number, result: Result } {
     const res = [] as Result[]
-    const headers: (WsonSetter | null)[] = []
+    const headers: (ShonSetter | null)[] = []
 
     let col_iter = column
     for (; col_iter <= this.max_column; col_iter++) {
@@ -253,7 +258,7 @@ export class WsonReader {
 
   getObject(row: number, column: number): { row: number, column: number, result: Result } {
     const res = {} as Result
-    let last_setter: WsonSetter | null = null
+    let last_setter: ShonSetter | null = null
 
     do {
       const current = this.getCell(row, column)?.toString()

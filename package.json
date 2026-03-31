@@ -1,5 +1,5 @@
 {
-  "name": "sheet-object-notation",
+  "name": "@salesway/shon",
   "module": "index.ts",
   "type": "module",
   "private": true,

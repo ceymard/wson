@@ -60,7 +60,109 @@ function getValue(text: string): unknown {
 // Strings do not need to be quoted
 export function parseObject(text: string, pos = 0): { res: any, pos: number } {
   const res = {} as any
-  return {res, pos}
+  let start = pos
+  let last_non_space = pos
+  const len = text.length
+
+  if (text[pos] === "{") {
+    last_non_space = start = pos = pos + 1
+  }
+
+  while (pos < len) {
+
+    // advance to the first non-space character
+    while (pos < len && spaces.has(text[pos])) {
+      last_non_space = start = pos = pos + 1
+    }
+
+    if (pos >= len) {
+      break
+    }
+
+    if (text[pos] === "}") {
+      pos++
+      break
+    }
+
+    while (pos < len && text[pos] !== ":") {
+      if (!spaces.has(text[pos])) {
+        last_non_space = pos + 1
+      }
+      pos++
+    }
+
+    let prop = text.slice(start, last_non_space)
+
+    // We should be on a property name
+    if (text[pos] !== ":") {
+      console.error("prop", prop)
+      console.error("end", text.slice(pos))
+      console.error("res", res)
+
+      throw new Error("Expected : after property name")
+    }
+    pos++
+
+    // skip spaces
+    while (pos < len && spaces.has(text[pos])) {
+      last_non_space = start = pos = pos + 1
+    }
+
+    if (pos >= len) {
+      break
+    }
+
+    // We're now on a non-space character
+    if (text[pos] === "[") {
+      const { res: sub_res, pos: sub_pos } = parseArray(text, pos)
+      res[prop] = sub_res
+      start = last_non_space = pos = sub_pos
+    } else if (text[pos] === "{" ) {
+      const { res: sub_res, pos: sub_pos } = parseObject(text, pos)
+      res[prop] = sub_res
+      start = last_non_space = pos = sub_pos
+    } else {
+
+      while (pos < len && text[pos] !== "," && text[pos] !== "}") {
+        if (!spaces.has(text[pos])) {
+          last_non_space = pos + 1
+        }
+        pos++
+      }
+
+      res[prop] = getValue(text.slice(start, last_non_space))
+    }
+
+    // advance to the first non-space character
+    while (pos < len && spaces.has(text[pos])) {
+      last_non_space = start = pos = pos + 1
+    }
+
+    if (pos >= len) {
+      break
+    }
+
+    if (text[pos] === ",") {
+      pos++
+      continue
+    }
+
+    // advance to the first non-space character
+    while (pos < len && spaces.has(text[pos])) {
+      last_non_space = start = pos = pos + 1
+    }
+
+    if (pos >= len) {
+      break
+    }
+
+    if (text[pos] === "}") {
+      pos++
+      break
+    }
+  }
+
+  return { res, pos }
 }
 
 // Parse an array in simple notation
@@ -77,6 +179,7 @@ export function parseArray(text: string, pos = 0): { res: any, pos: number } {
     last_non_space = start = pos = pos + 1
   }
 
+  console.error("start", text.slice(pos))
   while (pos < len) {
 
     // advance to the first non-space character
@@ -88,9 +191,19 @@ export function parseArray(text: string, pos = 0): { res: any, pos: number } {
       break
     }
 
+    if (text[pos] === "]") {
+      console.error("end", text.slice(pos))
+      pos++
+      break
+    }
+
     // We're now on a non-space character
     if (text[pos] === "[") {
-      const { res: sub_res, pos: sub_pos } = parseArray(text, pos + 1)
+      const { res: sub_res, pos: sub_pos } = parseArray(text, pos)
+      res.push(sub_res)
+      start = last_non_space = pos = sub_pos
+    } else if (text[pos] === "{" ) {
+      const { res: sub_res, pos: sub_pos } = parseObject(text, pos)
       res.push(sub_res)
       start = last_non_space = pos = sub_pos
     } else {
@@ -118,13 +231,8 @@ export function parseArray(text: string, pos = 0): { res: any, pos: number } {
 
     if (text[pos] === ",") {
       pos++
-      continue
     }
 
-    if (text[pos] === "]") {
-      pos++
-      break
-    }
   }
 
   return { res, pos }
