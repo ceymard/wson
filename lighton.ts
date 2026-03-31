@@ -95,10 +95,6 @@ export function parseObject(text: string, pos = 0): { res: any, pos: number } {
 
     // We should be on a property name
     if (text[pos] !== ":") {
-      console.error("prop", prop)
-      console.error("end", text.slice(pos))
-      console.error("res", res)
-
       throw new Error("Expected : after property name")
     }
     pos++
@@ -179,7 +175,6 @@ export function parseArray(text: string, pos = 0): { res: any, pos: number } {
     last_non_space = start = pos = pos + 1
   }
 
-  console.error("start", text.slice(pos))
   while (pos < len) {
 
     // advance to the first non-space character
@@ -192,7 +187,6 @@ export function parseArray(text: string, pos = 0): { res: any, pos: number } {
     }
 
     if (text[pos] === "]") {
-      console.error("end", text.slice(pos))
       pos++
       break
     }
