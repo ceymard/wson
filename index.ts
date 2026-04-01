@@ -1,7 +1,7 @@
 import { parseArray, parseObject } from "./lighton";
 
 export type Primitive = string | number | Date | boolean | null
-export type Result = {[name: string]: Result | Primitive } | Result[] | Primitive
+export type Result = { [name: string]: Result | Primitive } | Result[] | Primitive
 
 export const enum Modifier {
   OBJECT = ">",
@@ -16,10 +16,91 @@ export const enum Modifier {
 
 const re_obj_modifier = new RegExp("\\s*(" + [Modifier.OBJECT, Modifier.INLINE, Modifier.TABLE].join("|") + ")$")
 
-export class MacroHandler {
+export function clone(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(clone)
+  } else if (typeof obj === "object" && obj !== null) {
+    return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, clone(value)]))
+  } else {
+    return obj
+  }
+}
+
+export class MacroScope {
+  constructor(public parent: MacroScope | null = null) { }
   registry = new Map<string, any>()
 
-  register(name: string, macro: any): void {}
+  register(name: string, macro: any): void {
+    if (this.registry.has(name)) {
+      throw new Error(`Macro ${name} already registered`)
+    }
+    this.registry.set(name, macro)
+  }
+
+  get(name: string): any | undefined {
+    return this.registry.get(name) ?? this.parent?.get(name)
+  }
+
+  runMacro(name: string): any {
+    const macro = this.get(name)
+    if (macro == null) {
+      return undefined
+    }
+    return this.eval(clone(macro))
+  }
+
+  eval(obj: any): any {
+    if (this.registry.size === 0) {
+      return obj
+    }
+
+    if (Array.isArray(obj)) {
+      let first = obj[0]
+      if (typeof first === "string" && first.startsWith("!#")) {
+        const sub = new MacroScope(this)
+        for (let i = 1, l = obj.length; i < l; i++) {
+          sub.register(`#${i}`, obj[i])
+        }
+        const macro = sub.runMacro(first.slice(1))
+        if (macro !== undefined) {
+          return macro
+        }
+      }
+
+      let slice = obj.slice()
+      for (let i = 0, l = obj.length; i < l; i++) {
+        let val = obj[i]
+        if (typeof val === "string" && val.startsWith("#")) {
+          if (val.startsWith("#")) {
+            const macro = this.runMacro(val)
+            if (macro !== undefined) {
+              slice ??= obj.slice()
+              slice[i] = macro
+              continue
+            }
+          }
+        }
+        slice[i] = this.eval(obj[i])
+      }
+      return slice
+    } else if (typeof obj === "object" && obj !== null) {
+      let res: any = Object.assign({}, obj)
+
+      for (let x in obj) {
+        let val = obj[x]
+        if (typeof val === "string" && val.startsWith("#")) {
+          const macro = this.runMacro(val)
+          if (macro !== undefined) {
+            res[x] = macro
+            continue
+          }
+        }
+        res[x] = this.eval(obj[x])
+      }
+      return res
+    }
+    return obj
+  }
 }
 
 export type PathComponent = {
@@ -60,7 +141,7 @@ export class ShonReader {
     if (typeof cell === "string") {
       if (cell[0] === Modifier.NULL) {
         let nb = 1
-        for ( ; nb < cell.length; nb++) {
+        for (; nb < cell.length; nb++) {
           if (cell[nb] === Modifier.NULL) {
             nb++
           } else {
@@ -89,7 +170,7 @@ export class ShonReader {
     return this.getCell(row, column) === undefined
   }
 
-  getSetter(value: string): {setter: ShonSetter | null, modifier: Modifier | null} {
+  getSetter(value: string): { setter: ShonSetter | null, modifier: Modifier | null } {
     let modifier: Modifier | null = null
     value = value.replace(re_obj_modifier, (match, mod) => {
       modifier = mod as Modifier
@@ -109,56 +190,58 @@ export class ShonReader {
     }
 
     if (paths.length === 0) {
-      return {setter: null, modifier}
+      return { setter: null, modifier }
     }
 
-    if (paths[paths.length-1]?.on_last) {
+    if (paths[paths.length - 1]?.on_last) {
       throw new Error("[<prop] cannot be the last path component")
     }
 
-    return {setter: function (result: Result, value: Result | Primitive): void {
-      let current: any = result
-      for (let i = 0, len = paths.length; i < len; i++) {
-        const path = paths[i]
-        const is_last = i === len - 1
+    return {
+      setter: function (result: Result, value: Result | Primitive): void {
+        let current: any = result
+        for (let i = 0, len = paths.length; i < len; i++) {
+          const path = paths[i]
+          const is_last = i === len - 1
 
-        if (path.array) {
-          let arr = (current[path.prop] ??= [])
-          if (!Array.isArray(arr)) {
-            throw new Error("Property " + path.prop + " is not an array")
-          }
-          if (path.on_last) {
-            if (arr.length === 0) {
-              current = paths[i + 1].array ? [] : {}
-              arr.push(current)
-            } else {
-              current = arr[arr.length - 1]
+          if (path.array) {
+            let arr = (current[path.prop] ??= [])
+            if (!Array.isArray(arr)) {
+              throw new Error("Property " + path.prop + " is not an array")
             }
-            continue
+            if (path.on_last) {
+              if (arr.length === 0) {
+                current = paths[i + 1].array ? [] : {}
+                arr.push(current)
+              } else {
+                current = arr[arr.length - 1]
+              }
+              continue
+            } else {
+              if (is_last) {
+                arr.push(value)
+                return
+              } else {
+                current = paths[i + 1].array ? [] : {}
+                arr.push(current)
+              }
+              continue
+            }
           } else {
             if (is_last) {
-              arr.push(value)
-              return
+              if (current[path.prop] == null) {
+                current[path.prop] = value
+              } else {
+                throw new Error("Property " + path.prop + " already exists")
+              }
             } else {
-              current = paths[i + 1].array ? [] : {}
-              arr.push(current)
+              current = (current[path.prop] ??= paths[i + 1].array ? [] : {})
             }
-            continue
-          }
-        } else {
-          if (is_last) {
-            if (current[path.prop] == null) {
-              current[path.prop] = value
-            } else {
-              throw new Error("Property " + path.prop + " already exists")
-            }
-          } else {
-            current = (current[path.prop] ??= paths[i + 1].array ? [] : {})
           }
         }
-      }
-      return
-    }, modifier}
+        return
+      }, modifier
+    }
   }
 
   getTopLevel() {
@@ -215,7 +298,7 @@ export class ShonReader {
 
     row++
 
-    while (row <= this.max_row && this.isEmpty(row, column-1)) {
+    while (row <= this.max_row && this.isEmpty(row, column - 1)) {
       let line = {} as Result
       let found_one = false
       for (let i = 0; i < headers.length; i++) {
@@ -257,7 +340,7 @@ export class ShonReader {
 
       row = _next_row
       _next_row = row + 1
-    } while (row <= this.max_row && this.isEmpty(row, column-1))
+    } while (row <= this.max_row && this.isEmpty(row, column - 1))
 
     return { row, column: column, result: result }
   }
@@ -310,7 +393,7 @@ export class ShonReader {
         }
       }
 
-    } while (row <= this.max_row && this.isEmpty(row, column-1))
+    } while (row <= this.max_row && this.isEmpty(row, column - 1))
 
     return { row, column, result: res }
   }
