@@ -4,7 +4,7 @@ import { readFileSync } from "fs"
 import { SmolWorkbook } from "smol-xlsx"
 import { ShonReader } from ".."
 
-const wb_array = readFileSync(path.join(__dirname, "wson-test.xlsx"))
+const wb_array = readFileSync(path.join(__dirname, "shon-test.xlsx"))
 const wb = new SmolWorkbook()
 
 wb.read(wb_array)

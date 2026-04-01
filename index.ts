@@ -16,6 +16,12 @@ export const enum Modifier {
 
 const re_obj_modifier = new RegExp("\\s*(" + [Modifier.OBJECT, Modifier.INLINE, Modifier.TABLE].join("|") + ")$")
 
+export class MacroHandler {
+  registry = new Map<string, any>()
+
+  register(name: string, macro: any): void {}
+}
+
 export type PathComponent = {
   prop: string
   array?: boolean
@@ -90,15 +96,15 @@ export class ShonReader {
       return ""
     })
 
-    const re_components = /\[(?<last>\<)?(?<array>[^\]]+?)\]|"(?<prop>[^"]*)"|(?<prop>[^.]+)(?=\.|$)/g
+    const re_components = /[\s\n]*\[(?<last>\<)?(?<array>[^\]]+?)\]|[\s\n]*"(?<prop>[^"]*)"|[\s\n]*(?<prop>[^.]+)(?=\.[\s\n]*|$)/g
     let paths = [] as PathComponent[]
 
     for (const component of value.matchAll(re_components)) {
       const grp = component.groups!
       if (grp.array) {
-        paths.push({ prop: grp.array, array: true, on_last: !!grp.last })
+        paths.push({ prop: grp.array.trim(), array: true, on_last: !!grp.last })
       } else if (grp.prop) {
-        paths.push({ prop: grp.prop, array: false, on_last: false })
+        paths.push({ prop: grp.prop.trim(), array: false, on_last: false })
       }
     }
 
