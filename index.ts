@@ -54,13 +54,24 @@ export class MacroScope {
       return obj
     }
 
+    if (typeof obj === "string" && obj.startsWith("#")) {
+      const macro = this.runMacro(obj)
+      if (macro !== undefined) {
+        return macro
+      }
+      return obj
+    }
+
     if (Array.isArray(obj)) {
       let first = obj[0]
       if (typeof first === "string" && first.startsWith("!#")) {
         const sub = new MacroScope(this)
+        let slc = [] as any[]
         for (let i = 1, l = obj.length; i < l; i++) {
-          sub.register(`#${i}`, obj[i])
+          slc.push(this.eval(obj[i]))
+          sub.register(`#${i}`, slc[i-1])
         }
+        sub.register("#...", slc)
         const macro = sub.runMacro(first.slice(1))
         if (macro !== undefined) {
           return macro
@@ -68,21 +79,30 @@ export class MacroScope {
       }
 
       let slice = obj.slice()
+      let res = [] as any[]
       for (let i = 0, l = obj.length; i < l; i++) {
         let val = obj[i]
         if (typeof val === "string" && val.startsWith("#")) {
           if (val.startsWith("#")) {
+            if (val === "#...") {
+              const args = this.get("#...")
+              if (Array.isArray(args)) {
+                res.push(...args)
+              }
+              continue
+            }
+
             const macro = this.runMacro(val)
             if (macro !== undefined) {
               slice ??= obj.slice()
-              slice[i] = macro
+              res.push(macro)
               continue
             }
           }
         }
-        slice[i] = this.eval(obj[i])
+        res.push(this.eval(obj[i]))
       }
-      return slice
+      return res
     } else if (typeof obj === "object" && obj !== null) {
       let res: any = Object.assign({}, obj)
 
