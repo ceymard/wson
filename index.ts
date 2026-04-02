@@ -9,9 +9,7 @@ export const enum Modifier {
   TABLE = "<<",
   TOP_LEVEL_APPEND = ">>",
   NULL = "~",
-
-  INLINE_OBJECT = "..{",
-  INLINE_ARRAY = "..[",
+  INTERPRET_LIGHTON = "!"
 }
 
 const re_obj_modifier = new RegExp("\\s*(" + [Modifier.OBJECT, Modifier.INLINE, Modifier.TABLE].join("|") + ")$")
@@ -36,6 +34,8 @@ export class MacroScope {
     }
     this.registry.set(name, macro)
   }
+
+  get size(): number { return this.registry.size + (this.parent?.size ?? 0) }
 
   get(name: string): any | undefined {
     return this.registry.get(name) ?? this.parent?.get(name)
@@ -151,26 +151,30 @@ export class ShonReader {
         return cell.slice(0, nb - 1)
       }
 
-      if (cell.startsWith(Modifier.INLINE_OBJECT) || cell.startsWith(Modifier.INLINE_ARRAY)) {
-        if (cell[2] === "{") {
-          return parseObject(cell.slice(2)).res
-        } else if (cell[2] === "[") {
-          return parseArray(cell.slice(2)).res
-        }
-        return cell
-      }
+      // if (cell.startsWith(Modifier.INLINE_OBJECT) || cell.startsWith(Modifier.INLINE_ARRAY)) {
+      //   if (cell[2] === "{") {
+      //     return parseObject(cell.slice(2)).res
+      //   } else if (cell[2] === "[") {
+      //     return parseArray(cell.slice(2)).res
+      //   }
+      //   return cell
+      // }
     }
     return cell
   }
 
   isEmpty(row: number, column: number): boolean {
-    // if (row < this.min_row || row > this.max_row || column < this.min_column || column > this.max_column) {
-    //   return true
-    // }
     return this.getCell(row, column) === undefined
   }
 
   getSetter(value: string): { setter: ShonSetter | null, modifier: Modifier | null } {
+
+    let parse_lighton = false
+    if (value.startsWith(Modifier.INTERPRET_LIGHTON)) {
+      parse_lighton = true
+      value = value.slice(1)
+    }
+
     let modifier: Modifier | null = null
     value = value.replace(re_obj_modifier, (match, mod) => {
       modifier = mod as Modifier
@@ -199,6 +203,22 @@ export class ShonReader {
 
     return {
       setter: function (result: Result, value: Result | Primitive): void {
+        if (parse_lighton && typeof value === "string") {
+          if (value.startsWith("[") && value.endsWith("]")) {
+            value = parseArray(value.slice(1, -1)).res
+          } else if (value.startsWith("{") && value.endsWith("}")) {
+            value = parseObject(value.slice(1, -1)).res
+          } else if (value === "true") {
+            value = true
+          } else if (value === "false") {
+            value = false
+          } else if (value === "null") {
+            value = null
+          } else if (value === "~") {
+            value = null
+          }
+        }
+
         let current: any = result
         for (let i = 0, len = paths.length; i < len; i++) {
           const path = paths[i]
