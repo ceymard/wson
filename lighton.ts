@@ -178,7 +178,6 @@ export function parseObject(text: string, pos = 0): { res: any, pos: number } {
 // Returns the parsed array and the position after the closing ]
 // Elements ignore space before and after them
 export function parseArray(text: string, pos = 0): { res: any, pos: number } {
-  console.error("parseArray", text, pos)
   const res = [] as any
   let start = pos
   let last_non_space = pos
@@ -255,6 +254,5 @@ export function parseArray(text: string, pos = 0): { res: any, pos: number } {
 
   }
 
-  console.error("parseArray", text, pos, res)
   return { res, pos }
 }
