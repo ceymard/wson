@@ -151,6 +151,7 @@ export function parseObject(text: string, pos = 0): { res: any, pos: number } {
 
     if (text[pos] === ",") {
       pos++
+      last_non_space = start = pos
       continue
     }
 
