@@ -117,6 +117,17 @@ export function parseObject(text: string, pos = 0): { res: any, pos: number } {
       const { res: sub_res, pos: sub_pos } = parseObject(text, pos)
       res[prop] = sub_res
       start = last_non_space = pos = sub_pos
+    } else if (dbl_quotes.has(text[pos])) {
+      let quote_start = pos
+      pos++
+      while (pos < len && !dbl_quotes.has(text[pos])) {
+        if (text[pos] === "\\") {
+          pos++
+        }
+        pos++
+      }
+      res[prop] = text.slice(quote_start + 1, pos)
+      start = last_non_space = pos = pos + 1
     } else {
 
       while (pos < len && text[pos] !== "," && text[pos] !== "}") {
@@ -200,7 +211,19 @@ export function parseArray(text: string, pos = 0): { res: any, pos: number } {
       const { res: sub_res, pos: sub_pos } = parseObject(text, pos)
       res.push(sub_res)
       start = last_non_space = pos = sub_pos
-    } else {
+    } else if (dbl_quotes.has(text[pos])) {
+      let quote_start = pos
+      pos++
+      while (pos < len && !dbl_quotes.has(text[pos])) {
+
+        if (text[pos] === "\\") {
+          pos++
+        }
+        pos++
+      }
+      res.push(text.slice(quote_start + 1, pos))
+      start = last_non_space = pos = pos + 1
+    }else {
 
       while (pos < len && text[pos] !== "," && text[pos] !== "]") {
         if (!spaces.has(text[pos])) {

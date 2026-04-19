@@ -14,115 +14,6 @@ export const enum Modifier {
 
 const re_obj_modifier = new RegExp("\\s*(" + [Modifier.OBJECT, Modifier.INLINE, Modifier.TABLE].join("|") + ")$")
 
-export function clone(obj: any): any {
-  if (Array.isArray(obj)) {
-    return obj.map(clone)
-  } else if (typeof obj === "object" && obj !== null) {
-    return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, clone(value)]))
-  } else {
-    return obj
-  }
-}
-
-export class MacroScope {
-  constructor(public parent: MacroScope | null = null) { }
-  registry = new Map<string, any>()
-
-  register(name: string, macro: any): void {
-    if (this.registry.has(name)) {
-      throw new Error(`Macro ${name} already registered`)
-    }
-    this.registry.set(name, macro)
-  }
-
-  get size(): number { return this.registry.size + (this.parent?.size ?? 0) }
-
-  get(name: string): any | undefined {
-    return this.registry.get(name) ?? this.parent?.get(name)
-  }
-
-  runMacro(name: string): any {
-    const macro = this.get(name)
-    if (macro == null) {
-      return undefined
-    }
-    return this.eval(clone(macro))
-  }
-
-  eval(obj: any): any {
-    if (this.registry.size === 0) {
-      return obj
-    }
-
-    if (typeof obj === "string" && obj.startsWith("#")) {
-      const macro = this.runMacro(obj)
-      if (macro !== undefined) {
-        return macro
-      }
-      return obj
-    }
-
-    if (Array.isArray(obj)) {
-      let first = obj[0]
-      if (typeof first === "string" && first.startsWith("!#")) {
-        const sub = new MacroScope(this)
-        let slc = [] as any[]
-        for (let i = 1, l = obj.length; i < l; i++) {
-          slc.push(this.eval(obj[i]))
-          sub.register(`#${i}`, slc[i-1])
-        }
-        sub.register("#...", slc)
-        const macro = sub.runMacro(first.slice(1))
-        if (macro !== undefined) {
-          return macro
-        }
-      }
-
-      let slice = obj.slice()
-      let res = [] as any[]
-      for (let i = 0, l = obj.length; i < l; i++) {
-        let val = obj[i]
-        if (typeof val === "string" && val.startsWith("#")) {
-          if (val.startsWith("#")) {
-            if (val === "#...") {
-              const args = this.get("#...")
-              if (Array.isArray(args)) {
-                res.push(...args)
-              }
-              continue
-            }
-
-            const macro = this.runMacro(val)
-            if (macro !== undefined) {
-              slice ??= obj.slice()
-              res.push(macro)
-              continue
-            }
-          }
-        }
-        res.push(this.eval(obj[i]))
-      }
-      return res
-    } else if (typeof obj === "object" && obj !== null) {
-      let res: any = Object.assign({}, obj)
-
-      for (let x in obj) {
-        let val = obj[x]
-        if (typeof val === "string" && val.startsWith("#")) {
-          const macro = this.runMacro(val)
-          if (macro !== undefined) {
-            res[x] = macro
-            continue
-          }
-        }
-        res[x] = this.eval(obj[x])
-      }
-      return res
-    }
-    return obj
-  }
-}
-
 export type PathComponent = {
   prop: string
   array?: boolean
@@ -207,6 +98,9 @@ export class ShonReader {
     for (const component of value.matchAll(re_components)) {
       const grp = component.groups!
       if (grp.array) {
+        if (grp.array[0] === "\"" && grp.array.endsWith("\"")) {
+          grp.array = grp.array.slice(1, -1)
+        }
         paths.push({ prop: grp.array.trim(), array: true, on_last: !!grp.last })
       } else if (grp.prop) {
         paths.push({ prop: grp.prop.trim(), array: false, on_last: false })
@@ -290,7 +184,7 @@ export class ShonReader {
 
     let cell = this.getCell(row, column)
 
-    if (cell?.toString() === Modifier.TOP_LEVEL_APPEND || cell?.toString() === Modifier.INLINE) {
+    if (cell?.toString() === Modifier.TOP_LEVEL_APPEND || cell?.toString() === Modifier.INLINE || cell?.toString() === Modifier.TABLE) {
       let res = [] as Result[]
 
       while (row <= this.max_row) {
@@ -299,6 +193,10 @@ export class ShonReader {
           const { result, row: new_row } = this.getObject(row, column + 1)
           row = new_row
           res.push(result)
+        } else if (cell?.toString() === Modifier.TABLE) {
+          const { result, row: new_row, column: new_column } = this.getTable(row, column + 1)
+          row = new_row
+          res.push(...result)
         } else if (cell === undefined) {
           row++
         } else if (cell?.toString() === Modifier.INLINE) {
@@ -316,7 +214,7 @@ export class ShonReader {
     return this.getTable(row, column)?.result
   }
 
-  getTable(row: number, column: number): { row: number, column: number, result: Result } {
+  getTable(row: number, column: number): { row: number, column: number, result: Result[] } {
     const res = [] as Result[]
     const headers: (ShonSetter | null)[] = []
 
@@ -343,7 +241,7 @@ export class ShonReader {
       let found_one = false
       for (let i = 0; i < headers.length; i++) {
         const value = this.getCell(row, column + i)
-        if (value !== undefined) {
+        if (value !== undefined && headers[i] != null) {
           found_one = true
           headers[i]?.(line, value)
         }
