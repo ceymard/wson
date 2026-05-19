@@ -7,9 +7,9 @@ export const enum Modifier {
   OBJECT = ">",
   INLINE = "<",
   TABLE = "<<",
-  TOP_LEVEL_APPEND = ">>",
+  TOP_LEVEL_APPEND = "[>]",
   NULL = "~",
-  INTERPRET_LIGHTON = "!"
+  DONT_INTERPRET_LIGHTON = "!"
 }
 
 const re_obj_modifier = new RegExp("\\s*(" + [Modifier.OBJECT, Modifier.INLINE, Modifier.TABLE].join("|") + ")$")
@@ -80,9 +80,9 @@ export class ShonReader {
 
   getSetter(value: string): { setter: ShonSetter | null, modifier: Modifier | null } {
 
-    let parse_lighton = false
-    if (value.startsWith(Modifier.INTERPRET_LIGHTON)) {
-      parse_lighton = true
+    let parse_lighton = true
+    if (value.startsWith(Modifier.DONT_INTERPRET_LIGHTON)) {
+      parse_lighton = false
       value = value.slice(1)
     }
 
@@ -323,6 +323,14 @@ export class ShonReader {
         }
 
         default: {
+          // There is content far to the right, this is an object
+          if (this.getCell(row, column + 2 ) !== undefined) {
+            const { result, row: new_row } = this.getObject(row, column + 1)
+            row = new_row
+            last_setter?.(res, result)
+            break
+          }
+
           const cell = this.getCell(row, column + 1)
           if (cell !== undefined) {
             last_setter?.(res, cell)
